@@ -1,135 +1,141 @@
 #include <iostream>
 #include <vector>
+#include <fstream>
+#include <string>
 
-class Bomb
+enum Type {Empty, Bomb, Wall};
+
+class Cell
 {
 public:
-    Bomb() : active{ false }, lifetime{ 0 } {}
+    Cell() : type{ Empty }, lifetime{ 0 }, maxLifetime{ 3 } {}
 
-    void activate() { active = true; }
-    void deactivate()
+    void setType(Type t) { type = t; }
+    Type getType() const { return type; }
+
+    void becomeEmpty()
     {
-        active = false;
+        type = Empty;
         lifetime = 0;
     }
     
     int getLifetime() const { return lifetime; }
+    int getMaxLifetime() const { return maxLifetime; }
     void increaseLifetime() { ++lifetime; }
-    
-    char print() const { return active ? 'O' : '.'; }
 
 private:
-    bool active;
+    Type type;
     int lifetime;
+    int maxLifetime;
 };
 
 class BombsField
 {
 public:
-    BombsField(const int& rows, const int& cols) : rows(rows), cols(cols), field(rows, std::vector<Bomb>(cols)) {}
+    BombsField(const int& rows, const int& cols) : rows(rows), cols(cols), field(rows, std::vector<Cell>(cols)) {}
 
     void print() const
     {
+        std::ofstream outputFile("output.txt");
+
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
-            {
-                std::cout << field[i][j].print();
+            {   
+                switch (field[i][j].getType())
+                {
+                    case Empty: outputFile << '.'; break;
+                    case Bomb: outputFile << 'O'; break;
+                    case Wall: outputFile << '#'; break;
+                }
             }
-            std::cout << std::endl;
+            outputFile << std::endl;
         }
+        outputFile.close();
     }
 
-    void activateBomb(int x, int y) { field[x][y].activate(); }
-    
-    //void energizeBomb(int x, int y) 
-    //{ 
-    //    field[x][y].increaseLifetime();
-    //    field[x][y].increaseLifetime();
-    //    field[x][y].increaseLifetime();
-    //}
-
+    void setBomb(int x, int y) { field[x][y].setType(Bomb); }
+    void setWall(int x, int y) { field[x][y].setType(Wall); }
 
     void explodeBomb(int x, int y)
     {
-        field[x][y].deactivate();
+        field[x][y].becomeEmpty();
 
         if (x != 0)
         {
-            if (field[x - 1][y].getLifetime() >= 3) { explodeBomb(x - 1, y); }
-            else { field[x - 1][y].deactivate(); }
+            if (field[x - 1][y].getLifetime() >= field[x - 1][y].getMaxLifetime()) { explodeBomb(x - 1, y); }
+            else if (field[x - 1][y].getType() == Bomb) { field[x - 1][y].becomeEmpty(); }
         }
         if (y != 0)
         {
-            if (field[x][y - 1].getLifetime() >= 3) { explodeBomb(x, y - 1); }
-            else { field[x][y - 1].deactivate(); }
+            if (field[x][y - 1].getLifetime() >= field[x][y - 1].getMaxLifetime()) { explodeBomb(x, y - 1); }
+            else if (field[x][y - 1].getType() == Bomb) { field[x][y - 1].becomeEmpty(); }
         }
         if (x != rows - 1)
         {
-            if (field[x + 1][y].getLifetime() >= 3) { explodeBomb(x + 1, y); }
-            else { field[x + 1][y].deactivate(); }
+            if (field[x + 1][y].getLifetime() >= field[x + 1][y].getMaxLifetime()) { explodeBomb(x + 1, y); }
+            else if (field[x + 1][y].getType() == Bomb) { field[x + 1][y].becomeEmpty(); }
         }
         if (y != cols - 1)
         {
-            if (field[x][y + 1].getLifetime() >= 3) { explodeBomb(x, y + 1); }
-            else { field[x][y + 1].deactivate(); }
+            if (field[x][y + 1].getLifetime() >= field[x][y + 1].getMaxLifetime()) { explodeBomb(x, y + 1); }
+            else if (field[x][y + 1].getLifetime() == Bomb) { field[x][y + 1].becomeEmpty(); }
         }
     }
 
-
-    void explodeStroke()
+    void waitASec()
     {
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {
-                if (field[i][j].print() == 'O') { field[i][j].increaseLifetime(); }
-
+                if (field[i][j].getType() == Bomb ) { field[i][j].increaseLifetime(); }
             }
         }
-
-        for (int i = 0; i < rows; ++i)
-        {
-            for (int j = 0; j < cols; ++j)
-            {
-                if (field[i][j].getLifetime() >= 3) { explodeBomb(i, j); }
-            }
-        }
-
     }
-
+ 
     void fillStroke()
     {
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {
-                if (field[i][j].print() == 'O') { field[i][j].increaseLifetime(); }
-                else { field[i][j].activate(); }
+                if (field[i][j].getType() == Bomb) { field[i][j].increaseLifetime(); }
+                else if (field[i][j].getType() == Empty) { field[i][j].setType(Bomb); }
             }
         }
     }
 
-    void firstStroke()
+    void explodeStroke()
     {
+        waitASec();
+
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {
-                if (field[i][j].print() == 'O') { field[i][j].increaseLifetime(); }
+                if (field[i][j].getType() == Bomb && field[i][j].getLifetime() >= field[i][j].getMaxLifetime()) { explodeBomb(i, j); }
             }
         }
     }
 
 private:
     int rows, cols;
-    std::vector<std::vector<Bomb>> field;
+    std::vector<std::vector<Cell>> field;
 };
 
 int main()
 {
+    std::ifstream inputFile("input.txt");
+    if (!inputFile) 
+    { 
+        std::cout << "Can't find input.txt" << std::endl;
+        std::cout << "Make sure that input.txt is in the same folder with .exe" << std::endl;
+        return 1;
+    }
+
     int rows{ 0 }, cols{ 0 }, secs{ 0 };
-    std::cin >> rows >> cols >> secs;
+    inputFile >> rows >> cols >> secs;
 
     BombsField bombsField(rows, cols);
 
@@ -137,17 +143,22 @@ int main()
 
     for (int i = 0; i < rows; ++i)
     {
-        std::cin >> temp;
+        inputFile >> temp;
         for (int j = 0; j < cols; ++j)
         {
             if (temp[j] != '.')
             {
-                bombsField.activateBomb(i, j);
+                bombsField.setBomb(i, j);
             }
         }
     }
 
-    bombsField.firstStroke();
+    //проверка на стену
+    //bombsField.setWall(3, 1);
+
+    inputFile.close();
+
+    bombsField.waitASec();
     --secs;
 
     for (int i = 0; i < secs; ++i)
@@ -156,7 +167,7 @@ int main()
         else bombsField.explodeStroke();
     }
 
-    std::cout << std::endl;
-
     bombsField.print();
+
+    return 1;
 }

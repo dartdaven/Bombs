@@ -2,31 +2,39 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <algorithm>
+#include <unordered_map>
 
-enum Type {Empty, Bomb, Wall};
+enum class Type { Empty, Bomb };
+
+std::unordered_map<Type, char> typeCharMap
+{
+    { Type::Empty, '.' },
+    { Type::Bomb, 'O' }
+};
 
 class Cell
 {
 public:
-    Cell() : type{ Empty }, lifetime{ 0 }, maxLifetime{ 3 } {}
+    Cell(Type type = Type::Empty, int maxLifetime = 3) : type{ type }, maxLifetime{ maxLifetime }, lifetime{ 0 } {}
 
     void setType(Type t) { type = t; }
     Type getType() const { return type; }
 
     void becomeEmpty()
     {
-        type = Empty;
+        type = Type::Empty;
         lifetime = 0;
     }
     
     int getLifetime() const { return lifetime; }
     int getMaxLifetime() const { return maxLifetime; }
-    void increaseLifetime() { ++lifetime; }
+    void incrementLifetime(int value) { lifetime += value; }
 
 private:
     Type type;
-    int lifetime;
     int maxLifetime;
+    int lifetime;
 };
 
 class BombsField
@@ -34,62 +42,42 @@ class BombsField
 public:
     BombsField(const int& rows, const int& cols) : rows(rows), cols(cols), field(rows, std::vector<Cell>(cols)) {}
 
-    void print() const
+    void print(std::ostream& ostream) const
     {
-        std::ofstream outputFile("output.txt");
-
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {   
-                switch (field[i][j].getType())
-                {
-                    case Empty: outputFile << '.'; break;
-                    case Bomb: outputFile << 'O'; break;
-                    case Wall: outputFile << '#'; break;
-                }
+                ostream << typeCharMap.at(field[i][j].getType());
             }
-            outputFile << std::endl;
+            ostream << std::endl;
         }
-        outputFile.close();
     }
 
-    void setBomb(int x, int y) { field[x][y].setType(Bomb); }
-    void setWall(int x, int y) { field[x][y].setType(Wall); }
+    void setType(Type type, int x, int y) { field[x][y].setType(type); }
 
     void explodeBomb(int x, int y)
     {
-        field[x][y].becomeEmpty();
+        for (int i = std::max(y - 1, 0); i <= std::min(y + 1, cols - 1); ++i)
+        {
+            if (field[x][i].getLifetime() >= field[x][i].getMaxLifetime() && i != y) { explodeBomb(x, i); }
+            else if (field[x][i].getType() == Type::Bomb) { field[x][i].becomeEmpty(); }
+        }
 
-        if (x != 0)
+        for (int i = std::max(x - 1, 0); i <= std::min(x + 1, rows - 1); ++i)
         {
-            if (field[x - 1][y].getLifetime() >= field[x - 1][y].getMaxLifetime()) { explodeBomb(x - 1, y); }
-            else if (field[x - 1][y].getType() == Bomb) { field[x - 1][y].becomeEmpty(); }
-        }
-        if (y != 0)
-        {
-            if (field[x][y - 1].getLifetime() >= field[x][y - 1].getMaxLifetime()) { explodeBomb(x, y - 1); }
-            else if (field[x][y - 1].getType() == Bomb) { field[x][y - 1].becomeEmpty(); }
-        }
-        if (x != rows - 1)
-        {
-            if (field[x + 1][y].getLifetime() >= field[x + 1][y].getMaxLifetime()) { explodeBomb(x + 1, y); }
-            else if (field[x + 1][y].getType() == Bomb) { field[x + 1][y].becomeEmpty(); }
-        }
-        if (y != cols - 1)
-        {
-            if (field[x][y + 1].getLifetime() >= field[x][y + 1].getMaxLifetime()) { explodeBomb(x, y + 1); }
-            else if (field[x][y + 1].getLifetime() == Bomb) { field[x][y + 1].becomeEmpty(); }
+            if (field[i][y].getLifetime() >= field[i][y].getMaxLifetime() && i != x) { explodeBomb(i, y); }
+            else if (field[i][y].getType() == Type::Bomb) { field[i][y].becomeEmpty(); }
         }
     }
 
-    void waitASec()
+    void waitSomeTime(int value)
     {
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {
-                if (field[i][j].getType() == Bomb ) { field[i][j].increaseLifetime(); }
+                if (field[i][j].getType() == Type::Bomb ) { field[i][j].incrementLifetime(value); }
             }
         }
     }
@@ -100,21 +88,21 @@ public:
         {
             for (int j = 0; j < cols; ++j)
             {
-                if (field[i][j].getType() == Bomb) { field[i][j].increaseLifetime(); }
-                else if (field[i][j].getType() == Empty) { field[i][j].setType(Bomb); }
+                if (field[i][j].getType() == Type::Bomb) { field[i][j].incrementLifetime(1); }
+                else if (field[i][j].getType() == Type::Empty) { field[i][j].setType(Type::Bomb); }
             }
         }
     }
 
     void explodeStroke()
     {
-        waitASec();
+        waitSomeTime(1);
 
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {
-                if (field[i][j].getType() == Bomb && field[i][j].getLifetime() >= field[i][j].getMaxLifetime()) { explodeBomb(i, j); }
+                if (field[i][j].getType() == Type::Bomb && field[i][j].getLifetime() >= field[i][j].getMaxLifetime()) { explodeBomb(i, j); }
             }
         }
     }
@@ -146,28 +134,31 @@ int main()
         inputFile >> temp;
         for (int j = 0; j < cols; ++j)
         {
-            if (temp[j] != '.')
+            for (const auto& pair : typeCharMap)
             {
-                bombsField.setBomb(i, j);
+                if (pair.second == temp[j]) { bombsField.setType(pair.first, i, j); break; }
             }
         }
     }
 
-    //проверка на стену
-    //bombsField.setWall(3, 1);
-
     inputFile.close();
 
-    bombsField.waitASec();
+    bombsField.waitSomeTime(1);
     --secs;
 
     for (int i = 0; i < secs; ++i)
     {
-        if (i % 2 == 0) { bombsField.fillStroke(); }
+        if (!(i % 2)) { bombsField.fillStroke(); }
         else bombsField.explodeStroke();
     }
 
-    bombsField.print();
+    std::ofstream outputFile("output.txt");
+    if (outputFile.is_open())
+    {
+        bombsField.print(outputFile);
+        outputFile.close();
+    }
+    else { std::cout << "Could not create output file" << std::endl; }
 
     return 1;
 }

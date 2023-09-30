@@ -1,6 +1,6 @@
 # Bombs Excercise
 
-## This repository is a solution to the following problem:
+### This repository is a solution to the following problem:
 
 There is a rectangular stack of size R on C. R is the number of rows, and C is the number of columns. The cells in the grid can either be empty or contain a bomb.
 
